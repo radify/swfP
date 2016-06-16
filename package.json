@@ -1,6 +1,6 @@
 {
   "name": "swfp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A framework for building applications on AWS SWF using Promises",
   "main": "index.js",
   "scripts": {
