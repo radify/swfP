@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 
-var {
-  createContext,
-  runInContext
-} = require('vm');
-
 var {ActivityPoller} = require('aws-swf');
 var {hostname} = require('os');
-var {readFile} = require('fs');
+var resolve    = require('resolve');
 var bluebird   = require('bluebird');
 var yargs      = require('yargs');
+var throttle   = require('lodash.throttle');
+
+const HEARTBEAT_PERIOD = 10;
+
+var {load} = require('./common');
 
 var options = yargs
   .usage('Usage: $0 [options]')
@@ -33,8 +33,6 @@ var options = yargs
   .demand(['file', 'domain', 'taskList'])
   .argv;
 
-const readFileP = bluebird.promisify(readFile);
-
 const parse = str => {
   try {
     return JSON.parse(str);
@@ -44,30 +42,30 @@ const parse = str => {
 };
 
 const execute = (file, activityTask) =>
-  bluebird
-    .all([readFileP(file), activityContext(activityTask)])
-    .then(([code, context]) => {
-      runInContext(code, context);
-
+  load(file)
+    .then(activities => {
       var {name} = activityTask.config.activityType;
 
-      var activity = context.exports[name];
+      var activity = activities[name];
       if (!activity) {
         throw Error(`Activity '${name}' not defined in '${file}'`);
       }
 
-      var input  = parse(activityTask.config.input);
+      var input = parse(activityTask.config.input);
+      var _context = context(activityTask);
+      console.log(`Executing activity '${name}'`, input);
 
-      console.log(
-        `Executing activity '${name}'`,
-        activityTask.config.input
-      );
-
-      return bluebird.resolve(activity(input));
+      return bluebird.resolve(activity(input, _context))
+        .finally(() => _context.heartbeat.cancel());
     });
 
-const activityContext = activityTask => createContext({
-  Promise: bluebird
+const context = activityTask => ({
+  Promise: bluebird,
+
+  heartbeat: throttle(data => {
+    console.log('Sending heartbeat', data);
+    activityTask.recordHeartbeat(data);
+  }, HEARTBEAT_PERIOD * 1000)
 });
 
 var worker = new ActivityPoller({
@@ -83,7 +81,7 @@ worker.on('activityTask', activityTask => {
     .tap(result => console.log('Activity execution succeeded', result))
     .catch(err => {
       console.error('Activity execution failed', err);
-      activityTask.respondFailed(err.name, err);
+      activityTask.respondFailed(err.name, err.message);
       throw err;
     })
     .then(result => activityTask.respondCompleted(result));

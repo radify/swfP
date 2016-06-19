@@ -26,24 +26,25 @@ npm install --save swfp
 
 ### Decider
 
-A decider exports a single promise chain, like so:
+A decider is implemented as a module, which exports a single function.
+When called, this function should return a Promise, like so:
 
 ```javascript
-exports = Promise.all([
-	activity('firstUpper', input),
-	activity('restLower', input)
-])
-.then(parts => activity('concat', parts));
+module.exports = (input, schedule) =>
+  schedule.Promise
+    .all([
+  	  schedule.activity('firstUpper', input),
+	  schedule.activity('restLower', input)
+    ])
+    .then(parts => schedule.activity('concat', parts));
 ```
 
-The context in which the decider runs has the following globals:
+The decider function accepts parameters `input` (which refers to the
+original workflow input) and `schedule`, which exposes the following
+properties: 
 
 - `Promise`
   Refers to Bluebird instead of the ES6 implementation
-
-- `input`
-  The input value that was supplied to the Workflow when it was initially
-  started
 
 - `activity(name, input, options)`
   Starts an activity named `name` with input parameter `input`. Additional,
@@ -71,7 +72,7 @@ The context in which the decider runs has the following globals:
 You can then start a worker for this decider by invoking the following command:
 
 ```
-swfp-decider --file=decider.js --domain=myDomain --taskList=myTasks
+swfp-decider --file=./decider.js --domain=myDomain --taskList=myTasks
 ```
 
 ### Activity Worker
@@ -79,7 +80,7 @@ swfp-decider --file=decider.js --domain=myDomain --taskList=myTasks
 An activity worker exports an object containing activity implementations, like so:
 
 ```javascript
-exports = {
+module.exports = {
 	firstUpper: str => str[0].toUpperCase(),
 	restLower:  str => str.substring(1).toLowerCase(),
 	concat:     str => str.join('')
@@ -100,14 +101,11 @@ Each exported function may do one of the following:
 You can then start a worker for these activites by invoking the following command:
 
 ```
-swfp-worker --file=tasks.js --domain=myDomain --taskList=myTasks
+swfp-worker --file=./tasks.js --domain=myDomain --taskList=myTasks
 ```
 
 ### Caveats and Notes
 
-- Both the decider and actvity workers will load their respective files on each
-  decision or task execution. The files are evaluated using `vm.runInContext()`,
-  **not** `require()`, so assignment is only supported on `exports`.
 - The Promise chain that a Decider exports only gives the *illusion* of a
   persistent state; the Decision poller destroys the object at the end of each
   decision execution.

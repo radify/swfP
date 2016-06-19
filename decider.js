@@ -1,21 +1,16 @@
 #!/usr/bin/env node
 
-var {
-  runInContext,
-  createContext
-} = require('vm');
-
-var {readFile} = require('fs');
 var {Decider}  = require('aws-swf');
 var {hostname} = require('os');
 var bluebird   = require('bluebird');
 var yargs      = require('yargs');
 
+var {load} = require('./common');
+
 bluebird.config({
   cancellation: true
 });
 
-const readFileP = bluebird.promisify(readFile);
 const wait = () => new Promise(resolve => setImmediate(resolve));
 
 var options = yargs
@@ -41,18 +36,17 @@ var options = yargs
   .argv;
 
 const execute = (file, decisionTask) =>
-  bluebird
-    .all([readFileP(file), decisionContext(decisionTask)])
-    .then(([code, context]) => {
-       runInContext(code, context);
+  load(file)
+    .then(decider => ({
+      decider: decider(
+        decisionTask.eventList.workflow_input(),
+        context(decisionTask)
+      )
+    }))
+    .tap(wait);
 
-       return {decider: bluebird.resolve(context.exports)};
-    });
-
-const decisionContext = decisionTask => createContext(Object.assign(global, {
+const context = decisionTask => ({
   Promise: bluebird,
-
-  input: decisionTask.eventList.workflow_input(),
 
   activity: (name, input, options = {}) =>
     new bluebird.Promise((resolve, reject) => {
@@ -62,8 +56,7 @@ const decisionContext = decisionTask => createContext(Object.assign(global, {
         let schedule = Object.assign({
           name,
           input,
-          activity: name,
-          activityVersion: '1.0.0'
+          activity: name
         }, options);
 
         return decisionTask.response.schedule(schedule);
@@ -141,7 +134,7 @@ const decisionContext = decisionTask => createContext(Object.assign(global, {
       console.log(`Waiting for signal '${name}'`);
       return decisionTask.response.wait();
     })
-}));
+});
 
 const handleDecisionState = ({response}) => ({decider}) => {
   /**
@@ -198,7 +191,6 @@ decider.on('decisionTask', decisionTask => {
   console.log('Received decision task');
 
   execute(options.file, decisionTask)
-    .tap(wait)
     .tap(() => console.log('Decision execution finished'))
     .catch(err => {
       console.error('Decision execution failed', err);
