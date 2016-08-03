@@ -37,6 +37,17 @@ var options = yargs
 
 const execute = (file, decisionTask) =>
   load(file)
+    .then(module => {
+      if (typeof module === 'function') {
+        return module;
+      }
+
+      if (typeof module.default === 'function') {
+        return module.default;
+      }
+
+      throw new TypeError(`${file} is not a function`);
+    })
     .then(decider => ({
       decider: decider(
         decisionTask.eventList.workflow_input(),
@@ -159,10 +170,10 @@ const handleDecisionState = ({response}) => ({decider}) => {
   }
 
   /**
-   * The decider promise has been rejected, which means that the workflow
-   * should be marked as failed. Due to inconsistency in the in `aws-swf`
-   * library, the decision must be manually added to the decision list
-   * instead of using `.fail()`
+   * The decider promise has been rejected, which means that the workflow should
+   * be marked as failed. Due to inconsistency in the `aws-swf` library, the
+   * decision must be manually added to the decision list instead of using
+   * `.fail()`
    */
   if (decider.isRejected()) {
     let reason = decider.reason();
