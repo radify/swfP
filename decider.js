@@ -32,6 +32,10 @@ var options = yargs
     describe: 'Unique identifier of this decider instance',
     default: `decider-${hostname()}-${process.pid}`
   })
+  .option('limit', {
+    alias: 'l',
+    describe: 'Limit the number of decider processes that can run concurrently'
+  })
   .demand(['file', 'domain', 'taskList'])
   .argv;
 
@@ -194,6 +198,7 @@ var decider = new Decider({
   domain: options.domain,
   identity: options.identity,
   taskList: {name: options.taskList},
+  taskLimitation: options.limit,
   maximumPageSize: 500,
   reverseOrder: false
 });

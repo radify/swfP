@@ -13,7 +13,7 @@
   "author": "Radify",
   "license": "BSD-3-Clause",
   "dependencies": {
-    "aws-swf": "^4.1.0",
+    "aws-swf": "MichaelKovalchuk/aws-swf#e8e46b9",
     "bluebird": "^3.4.0",
     "lodash.throttle": "^4.0.1",
     "resolve": "^1.1.7",

@@ -30,6 +30,10 @@ var options = yargs
     describe: 'Unique identifier of this worker instance',
     default: `activity-${hostname()}-${process.pid}`
   })
+  .option('limit', {
+    alias: 'l',
+    describe: 'Limit the number of worker processes that can run concurrently'
+  })
   .demand(['file', 'domain', 'taskList'])
   .argv;
 
@@ -71,7 +75,8 @@ const context = activityTask => ({
 var worker = new ActivityPoller({
   domain: options.domain,
   identity: options.identity,
-  taskList: {name: options.taskList}
+  taskList: {name: options.taskList},
+  taskLimitation: options.limit
 });
 
 worker.on('activityTask', activityTask => {
